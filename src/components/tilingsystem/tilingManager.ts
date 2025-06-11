@@ -918,28 +918,26 @@ export class TilingManager {
                 global.workspaceManager.get_active_workspace_index(),
         );
 
-        if (wasSnapAssistingLayout && currentWorkspaceWindows.length === layout.tiles.length) {
+        if (wasSnapAssistingLayout) {
             // seta o layout escolhido no assistant como o atual
-            // TODO
+            this._debug('Salvando o layout escolhido no assistant como o atual')
 
+            const selected = Settings.get_selected_layouts();
+            selected[window.get_workspace().index()][this._monitor.index] = wasSnapAssistingLayout.id;
+            Settings.save_selected_layouts(selected);
+        }
+
+        if (wasSnapAssistingLayout && currentWorkspaceWindows.length === layout.tiles.length) {
             // tenta acomodar as windows restantes nas posições restantes
-            this._debug("aaaaaa windows")
-            this._debug(currentWorkspaceWindows.length)
-            this._debug("aaaaa windows end"
-            )
-
             const nontiledWindows = currentWorkspaceWindows
               .filter(
                 // desconsidera a window movida ou alguma minimizada
                 (win) => win.get_id() !== window.get_id() && !win.minimized,
               );
 
-            this._debug("aaaaaa windows")
-            this._debug(nontiledWindows.length)
-            this._debug("aaaaa windows end")
+            this._debug("Mesmo numero de janelas que o layout, vamos fazer o autotile")
+            this._debug(`nontiledWindows: ${nontiledWindows.length}`)
 
-            // tenta acomodar as windows restantes nas posições restantes sem sugestão pois ja sabemos mais ou menos onde
-            // elas devem ficar (nao vamos suar o _openWindowsSuggestions aqui)
             nontiledWindows.forEach(
               (win) => this._autoTile(win, false)
             )
@@ -1300,8 +1298,10 @@ export class TilingManager {
         // do not handle windows in monitors not managed by this manager
         this._debug('gonna autotile')
 
-        if (window.get_monitor() !== this._monitor.index) return;
-        this._debug('gonna autotile 2')
+        if (window.get_monitor() !== this._monitor.index) {
+            this._debug('Janela não está no monitor gerenciado por este TilingManager');
+            return;
+        }
 
         if (
             window === null ||
@@ -1311,12 +1311,26 @@ export class TilingManager {
             window.minimized ||
             window.maximizedHorizontally ||
             window.maximizedVertically
-        )
+        ) {
+            this._debug('Janela não atende aos requisitos para autotile');
+            this._debug(`windowType: ${window.windowType}`);
+            this._debug(`transient_for: ${window.get_transient_for() !== null}`);
+            this._debug(`is_attached_dialog: ${window.is_attached_dialog()}`);
+            this._debug(`minimized: ${window.minimized}`);
+            this._debug(`maximizedHorizontally: ${window.maximizedHorizontally}`);
+            this._debug(`maximizedVertically: ${window.maximizedVertically}`);
             return;
+        }
+        this._debug('gonna autotile 3');
 
         (window as ExtendedWindow).assignedTile = undefined;
         const vacantTile = this._findEmptyTile(window);
-        if (!vacantTile) return;
+        if (!vacantTile) {
+            this._debug()
+            return;
+        }
+
+        this._debug('Encontrou tile vazio, vai fazer o autotile');
 
         if (windowCreated) {
             const windowActor =
@@ -1358,17 +1372,24 @@ export class TilingManager {
             window.get_monitor(),
             global.workspaceManager.get_active_workspace_index(),
         ).tiles;
+        this._debug(`layout selecionado tiles:`);
+        this._debug(tiles);
+
         const workArea = Main.layoutManager.getWorkAreaForMonitor(
             window.get_monitor(),
         );
         const vacantTiles = tiles.filter((t) => {
-            const tileRect = TileUtils.apply_props(t, workArea);
-            return !tiledWindows.find((win) =>
-                tileRect.overlap(win.get_frame_rect()),
-            );
+           const tileRect = TileUtils.apply_props(t, workArea);
+           return !tiledWindows.find((win) =>
+               tileRect.overlap(win.get_frame_rect()),
+           );
         });
 
-        if (vacantTiles.length === 0) return undefined;
+        if (vacantTiles.length === 0) {
+            this._debug('Não encontrou tile vazio');
+            return undefined;
+        };
+        this._debug('Encontrou tile vazio, vai fazer o autotile');
 
         // finally find the nearest tile to the center of the screen
         vacantTiles.sort((a, b) => a.x - b.x);
@@ -1389,8 +1410,11 @@ export class TilingManager {
             }
         }
 
-        if (bestTileIndex < 0 || bestTileIndex >= vacantTiles.length)
+        if (bestTileIndex < 0 || bestTileIndex >= vacantTiles.length) {
+            this._debug("eh, na real nao achou o bestTileIndex")
             return undefined;
+        }
+
         return vacantTiles[bestTileIndex];
     }
 }
