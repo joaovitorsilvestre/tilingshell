@@ -770,6 +770,8 @@ export class TilingManager {
         this._isGrabbingWindow = false;
         this._grabStartPosition = null;
 
+        this._debug("Dropadooooo yra")
+
         this._signals.disconnect(window);
         TouchPointer.get().reset();
 
@@ -892,15 +894,66 @@ export class TilingManager {
                     this._monitor.index,
                     window.get_workspace().index(),
                 );
-        this._openWindowsSuggestions(
-            window,
-            desiredWindowRect,
-            window.get_monitor(),
-            layout,
-            tilingLayout.innerGaps,
-            tilingLayout.outerGaps,
-            tilingLayout.scalingFactor,
+
+        //this._openWindowsSuggestions(
+        //    window,
+        //    desiredWindowRect,
+        //    window.get_monitor(),
+        //    layout,
+        //    tilingLayout.innerGaps,
+        //    tilingLayout.outerGaps,
+        //    tilingLayout.scalingFactor,
+        //);
+        // Antes de tudo precisamos pegar qual o layout que foi selecionado e marcar como o atual
+
+        const allWindows = getWindows();
+        this._debug("all windows")
+        this._debug(allWindows.length)
+        this._debug(wasSnapAssistingLayout)
+        this._debug("all windows end")
+
+        const currentWorkspaceWindows = allWindows.filter(
+            (win) =>
+                win.get_workspace().index() ===
+                global.workspaceManager.get_active_workspace_index(),
         );
+
+        if (wasSnapAssistingLayout && currentWorkspaceWindows.length === layout.tiles.length) {
+            // seta o layout escolhido no assistant como o atual
+            // TODO
+
+            // tenta acomodar as windows restantes nas posições restantes
+            this._debug("aaaaaa windows")
+            this._debug(currentWorkspaceWindows.length)
+            this._debug("aaaaa windows end"
+            )
+
+            const nontiledWindows = currentWorkspaceWindows
+              .filter(
+                // desconsidera a window movida ou alguma minimizada
+                (win) => win.get_id() !== window.get_id() && !win.minimized,
+              );
+
+            this._debug("aaaaaa windows")
+            this._debug(nontiledWindows.length)
+            this._debug("aaaaa windows end")
+
+            // tenta acomodar as windows restantes nas posições restantes sem sugestão pois ja sabemos mais ou menos onde
+            // elas devem ficar (nao vamos suar o _openWindowsSuggestions aqui)
+            nontiledWindows.forEach(
+              (win) => this._autoTile(win, false)
+            )
+        } else {
+            this._openWindowsSuggestions(
+                window,
+                desiredWindowRect,
+                window.get_monitor(),
+                layout,
+                tilingLayout.innerGaps,
+                tilingLayout.outerGaps,
+                tilingLayout.scalingFactor,
+            );
+        }
     }
 
     private _openWindowsSuggestions(
@@ -1245,7 +1298,10 @@ export class TilingManager {
 
     private _autoTile(window: Meta.Window, windowCreated: boolean) {
         // do not handle windows in monitors not managed by this manager
+        this._debug('gonna autotile')
+
         if (window.get_monitor() !== this._monitor.index) return;
+        this._debug('gonna autotile 2')
 
         if (
             window === null ||
