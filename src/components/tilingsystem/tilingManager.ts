@@ -770,8 +770,6 @@ export class TilingManager {
         this._isGrabbingWindow = false;
         this._grabStartPosition = null;
 
-        this._debug("Dropadooooo yra")
-
         this._signals.disconnect(window);
         TouchPointer.get().reset();
 
@@ -841,9 +839,10 @@ export class TilingManager {
         (window as ExtendedWindow).originalSize = window
             .get_frame_rect()
             .copy();
-        (window as ExtendedWindow).assignedTile = new Tile({
+        const tileUsed = new Tile({
             ...TileUtils.build_tile(selectedTilesRect, this._workArea),
         });
+        (window as ExtendedWindow).assignedTile = tileUsed;
         this._easeWindowRect(window, desiredWindowRect);
 
         if (!tilingLayout || !canShowTilingSuggestions) return;
@@ -895,52 +894,43 @@ export class TilingManager {
                     window.get_workspace().index(),
                 );
 
-        //this._openWindowsSuggestions(
-        //    window,
-        //    desiredWindowRect,
-        //    window.get_monitor(),
-        //    layout,
-        //    tilingLayout.innerGaps,
-        //    tilingLayout.outerGaps,
-        //    tilingLayout.scalingFactor,
-        //);
-        // Antes de tudo precisamos pegar qual o layout que foi selecionado e marcar como o atual
-
-        const allWindows = getWindows();
-        this._debug("all windows")
-        this._debug(allWindows.length)
-        this._debug(wasSnapAssistingLayout)
-        this._debug("all windows end")
-
-        const currentWorkspaceWindows = allWindows.filter(
+        const currentWorkspaceWindows = getWindows().filter(
             (win) =>
                 win.get_workspace().index() ===
                 global.workspaceManager.get_active_workspace_index(),
         );
 
         if (wasSnapAssistingLayout) {
-            // seta o layout escolhido no assistant como o atual
-            this._debug('Salvando o layout escolhido no assistant como o atual')
-
+            // Save the selected layout in the assistant as the current layout for the ws and monitor
             const selected = Settings.get_selected_layouts();
             selected[window.get_workspace().index()][this._monitor.index] = wasSnapAssistingLayout.id;
             Settings.save_selected_layouts(selected);
         }
 
-        if (wasSnapAssistingLayout && currentWorkspaceWindows.length === layout.tiles.length) {
-            // tenta acomodar as windows restantes nas posições restantes
-            const nontiledWindows = currentWorkspaceWindows
+        if (
+            wasSnapAssistingLayout && 
+            layout.tiles.length == 2 &&
+            currentWorkspaceWindows.length === layout.tiles.length
+        ) {
+            // It's a layout with 2 tiles and the same number of windows, so we can autotile
+            // without opening the suggestions
+            const nontiledWindow = currentWorkspaceWindows
               .filter(
                 // desconsidera a window movida ou alguma minimizada
                 (win) => win.get_id() !== window.get_id() && !win.minimized,
-              );
+              )[0];
 
-            this._debug("Mesmo numero de janelas que o layout, vamos fazer o autotile")
-            this._debug(`nontiledWindows: ${nontiledWindows.length}`)
-
-            nontiledWindows.forEach(
-              (win) => this._autoTile(win, false)
+            const tileNotUsed = layout.tiles.find(
+                (tile) => 
+                    Number(tile.x.toFixed(3)) !== Number(tileUsed.x.toFixed(3)) ||
+                    Number(tile.y.toFixed(3)) !== Number(tileUsed.y.toFixed(3)) ||
+                    Number(tile.width.toFixed(3)) !== Number(tileUsed.width.toFixed(3)) ||
+                    Number(tile.height.toFixed(3)) !== Number(tileUsed.height.toFixed(3))
             )
+
+            if (tileNotUsed) {
+                this._easeWindowRectFromTile(tileNotUsed, nontiledWindow);
+            }
         } else {
             this._openWindowsSuggestions(
                 window,
@@ -1296,8 +1286,6 @@ export class TilingManager {
 
     private _autoTile(window: Meta.Window, windowCreated: boolean) {
         // do not handle windows in monitors not managed by this manager
-        this._debug('gonna autotile')
-
         if (window.get_monitor() !== this._monitor.index) {
             this._debug('Janela não está no monitor gerenciado por este TilingManager');
             return;
@@ -1378,11 +1366,12 @@ export class TilingManager {
         const workArea = Main.layoutManager.getWorkAreaForMonitor(
             window.get_monitor(),
         );
+        // forma antiga
         const vacantTiles = tiles.filter((t) => {
-           const tileRect = TileUtils.apply_props(t, workArea);
-           return !tiledWindows.find((win) =>
-               tileRect.overlap(win.get_frame_rect()),
-           );
+            const tileRect = TileUtils.apply_props(t, workArea);
+            return !tiledWindows.find((win) =>
+                tileRect.overlap(win.get_frame_rect()),
+            );
         });
 
         if (vacantTiles.length === 0) {
@@ -1414,7 +1403,7 @@ export class TilingManager {
             this._debug("eh, na real nao achou o bestTileIndex")
             return undefined;
         }
-
+            
         return vacantTiles[bestTileIndex];
     }
 }

@@ -21,7 +21,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prettier:check": "prettier --check \"**/*.{ts,scss}\"",
-    "prettier:fix": "prettier --write \"**/*.{ts,scss}\""
+    "prettier:fix": "prettier --write \"**/*.{ts,scss}\"",
+    "joao": "dbus-run-session -- env XDG_DATA_DIRS=$XDG_DATA_DIRS:$HOME/.local/share MUTTER_DEBUG_NUM_DUMMY_MONITORS=1 MUTTER_DEBUG_DUMMY_MODE_SPECS=1920x1080 gnome-shell --nested --wayland"
   },
   "devDependencies": {
     "esbuild": "^0.20.2",
