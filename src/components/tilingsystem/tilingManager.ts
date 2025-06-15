@@ -1466,6 +1466,11 @@ export class TilingManager {
 
         // If the number of windows is less or equal to the number of tiles, lets just allocate the new window
         if (windows.length <= tiles.length) {
+            if (windows.length < tiles.length) {
+                // theres is less windows than tiles in current layout, lets try to change to a layout with less tiles
+                this._deallocateWindows(window);
+            }
+
             this._debug('Number of windows matches the number of tiles, allocating the new window');
             this._autoTile(window, true);
             return
