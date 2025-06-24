@@ -294,13 +294,13 @@ export class TilingManager {
             'window-created',
             (_display: Meta.Display, window: Meta.Window) => {
                 // TODO criar configuracao para habilitar a troca de layout
-                this._allocateWindows(window);
+                this.newAllocWindows(window);
                 // if (Settings.ENABLE_AUTO_TILING) this._autoTile(window, true);
 
                 // Detects when a window is unmanaged (closed or minimized)
                 window.connect('unmanaged', () => {
                     this._debug('window unmanaged');
-                    this._deallocateWindows(window);
+                    this.newAllocWindows();
                     // if (Settings.ENABLE_AUTO_TILING) this._autoTile(window, false);
                 });
             },
@@ -310,7 +310,7 @@ export class TilingManager {
             'unmaximized',
             (_, window: Meta.Window) => {
                 // TODO criar configuracao para habilitar a troca de layout
-                this._deallocateWindows(window);
+                this.newAllocWindows();
                 // if (Settings.ENABLE_AUTO_TILING) this._autoTile(window, false);
             },
         );
@@ -745,7 +745,7 @@ export class TilingManager {
                 this._edgeTilingManager.abortEdgeTiling();
             }
         }
-        // if it was snap assisting then close the selection tile preview. We may reopen it if that's the case
+        // if it was snap assisting then close ththis._monie selection tile preview. We may reopen it if that's the case
         if (this._snapAssistingInfo.isSnapAssisting) {
             this._selectedTilesPreview.close(true);
             this._snapAssistingInfo.update(undefined);
@@ -913,9 +913,7 @@ export class TilingManager {
 
         if (wasSnapAssistingLayout) {
             // Save the selected layout in the assistant as the current layout for the ws and monitor
-            const selected = Settings.get_selected_layouts();
-            selected[window.get_workspace().index()][this._monitor.index] = wasSnapAssistingLayout.id;
-            Settings.save_selected_layouts(selected);
+            this.saveLayoutToWorkspaceAndMonitor(wasSnapAssistingLayout, window.get_workspace().index(), this._monitor.index);
         }
 
         if (
@@ -1440,115 +1438,22 @@ export class TilingManager {
         return vacantTiles[bestTileIndex];
     }
 
-    private _allocateWindows(window: Meta.Window) {
-        // First thing is to check if the number of windows matchs the number of tiles in the current layout
+    private newAllocWindows(newWindow: Meta.Window | null) {
         const currentWs = global.workspaceManager.get_active_workspace();
+        this._debug("000000")
+
         const tiles = GlobalState.get().getSelectedLayoutOfMonitor(
-            window.get_monitor(),
+            this._monitor.index,
             global.workspaceManager.get_active_workspace_index(),
         ).tiles;
+        this._debug("000000.11111")
 
         // Doest allocate windows if the new one is a transient dialog
-        if (window.get_transient_for() !== null || window.is_attached_dialog()) {
+        if (newWindow && (newWindow.get_transient_for() !== null || newWindow.is_attached_dialog())) {
             return;
         }
 
-        const windows: ExtendedWindow[] = getWindows()
-            .filter(
-                (w) =>
-                    w &&
-                    w.get_workspace().index() ===
-                        currentWs.index() &&
-                    !w.minimized &&
-                    w.windowType === Meta.WindowType.NORMAL,
-            )
-            .map((w) => w as ExtendedWindow);
-
-        // If the number of windows is less or equal to the number of tiles, lets just allocate the new window
-        if (windows.length <= tiles.length) {
-            if (windows.length < tiles.length) {
-                // theres is less windows than tiles in current layout, lets try to change to a layout with less tiles
-                this._deallocateWindows(window);
-            }
-
-            this._debug('Number of windows matches the number of tiles, allocating the new window');
-            this._autoTile(window, true);
-            return
-        }
-
-        // If the number of windows is greater than the number of tiles, lets try to find another layout
-        // that matches the number of windows
-        this._debug('Number of windows is greater than the number of tiles, trying to find another layout');
-        const layouts = GlobalState.get().layouts.filter(
-            (l) => l.tiles.length === windows.length,
-        );
-        if (layouts.length === 0) {
-            this._debug('No layout found for the number of windows, allocating the new window');
-            this._autoTile(window, true);
-            return;
-        }
-        // lets allocate each window to a tile
-        this._debug(`Found ${layouts.length} layouts for the number of windows`);
-        const layout = layouts[0]; // we can choose the first one, they are all the same
-        const tilesOfLayout = layout.tiles;
-
-        // Save the selected layout in the assistant as the current layout for the ws and monitor
-        const selected = Settings.get_selected_layouts();
-        selected[window.get_workspace().index()][this._monitor.index] = layout.id;
-        Settings.save_selected_layouts(selected);
-
-       const tilesOrderedBySize = tilesOfLayout.sort((a, b) => a.width - b.width).reverse();
-       const otherWindows = windows.filter((w) => w.get_id() !== window.get_id());
-
-        // Allocate old windows
-        otherWindows.forEach((currentWindow, index) => {
-            const tile = tilesOrderedBySize[index]
-            this._debug(`Allocating existing window ${currentWindow.get_title()} to tile ${tile.x}, ${tile.y}, ${tile.width}, ${tile.height}`);
-
-            this._easeWindowRectFromTile(tile, currentWindow, true);
-            (currentWindow as ExtendedWindow).assignedTile = tile;
-            (currentWindow as ExtendedWindow).originalSize = currentWindow.get_frame_rect().copy();
-        })
-
-        // Allocate the new created window
-        const lastTile = tilesOrderedBySize[tilesOrderedBySize.length - 1];
-        this._debug(`Allocating new window ${window.get_title()} to tile ${lastTile.x}, ${lastTile.y}, ${lastTile.width}, ${lastTile.height}`);
-
-        const windowActor = window.get_compositor_private() as Meta.WindowActor;
-        const id = windowActor.connect('first-frame', () => {
-            // while we restore the opacity, making the window visible
-            // again, we perform easing of movement too
-            // if the window is no longer a good candidate for
-            // autotiling, immediately restore its opacity
-            if (
-                !window.minimized &&
-                window.get_transient_for() === null &&
-                !window.is_attached_dialog()
-            ) {
-                this._debug('entrou no iff')
-                this._easeWindowRectFromTile(lastTile, window, false);
-            }
-            (window as ExtendedWindow).assignedTile = lastTile;
-            (window as ExtendedWindow).originalSize = window.get_frame_rect().copy();
-
-            this._debug("disconnect new window")
-            windowActor.disconnect(id);
-        });
-    }
-    private _deallocateWindows(window: Meta.Window) {
-        // First thing is to check if the number of windows matchs the number of tiles in the current layout
-        const currentWs = global.workspaceManager.get_active_workspace();
-        const tiles = GlobalState.get().getSelectedLayoutOfMonitor(
-            window.get_monitor(),
-            global.workspaceManager.get_active_workspace_index(),
-        ).tiles;
-
-        this._debug(`Deallocating windows for window ${window.get_title()}`);
-
-        // Doest allocate windows if the new one is a transient dialog
-        if (window.get_transient_for() !== null || window.is_attached_dialog()) {
-            return;
-        }
+        this._debug("111111")
 
         const windows: ExtendedWindow[] = getWindows()
             .filter(
@@ -1560,64 +1465,159 @@ export class TilingManager {
             )
             .map((w) => w as ExtendedWindow);
 
-        if (windows.length === tiles.length) {
-            // do nothing, is the same number of windows and tiles
-            this._debug('Number of windows minus one matches the number of tiles, doing nothing');
-            return;
-        }
-
-        // Get current layout index
-        const currentLayoutIndex = GlobalState.get().layouts.findIndex(
-            (l) =>
-                l.id ===
-                Settings.get_selected_layouts()[currentWs.index()][
-                    window.get_monitor()
-                ],
+        this._debug("2222")
+        const validLayouts = GlobalState.get().layouts.filter(
+            (l) => l.tiles.length === windows.length,
         );
 
-        // Searche previous layouts than match the number of windows
-        // The ideia is to follow the order that user created the layouts and go back to the previous ones that match
-        let layoutCandidade: Layout | undefined;
-
-        for (let i = currentLayoutIndex - 1; i >= 0; i--) {
-            const layout = GlobalState.get().layouts[i];
-            if (layout.tiles.length === windows.length) {
-                layoutCandidade = layout;
-                break;
-            }
-        }
-
-        if (layoutCandidade === undefined) {
-            // no previous layout found, lets try any created layout
-            layoutCandidade = GlobalState.get().layouts.find(
-                (l) => l.tiles.length === windows.length,
-            );
-        }
-
-        if (layoutCandidade === undefined) {
-            // no previous layout found, do nothing
-            this._debug('No previous layout found, doing nothing. Number of windows');
-            this._debug(GlobalState.get().layouts.map((l) => l.tiles.length));
-            this._debug(`Number of windows: ${windows.length}`);
+         if (validLayouts.length === 0) {
+            this._debug(`No layout found for the number of windows. windows: ${windows.length}`);
+            this._debug(validLayouts);
+            this._debug('-------');
+            this._autoTile(window, true);
             return;
+         }
+         this._debug("33333333333333")
+
+         if (windows.length < tiles.length) {
+              // theres is less windows than tiles in current layout
+              // the logic here is to find backwards from the current selected layout to the start to find a layout fit
+              // if not found, then find on all layouts.
+              // for example, theres is 4 layouts and the current is the third one, lets try 2 and 1 an then the 4th
+              // the ideia is that the user should have their layouts ordered by the number of windows,
+              // so the user can like put a order of preference for the layouts
+              this._debug('menorrrrrrrrrrrrrrrrrrrr')
+
+              const currentLayoutIndex = GlobalState.get().layouts.findIndex(
+                  (l) => l.id === Settings.get_selected_layouts()[currentWs.index()][this._monitor.index],
+              );
+
+              this._debug(`currentLayoutIndex: ${currentLayoutIndex}`)
+
+              let layout = this._findBestLayoutForWindow(validLayouts.slice(0, currentLayoutIndex), windows.length);
+
+              if (layout === undefined) {
+                  layout = this._findBestLayoutForWindow(validLayouts, windows.length);
+              }
+
+              this._debug(`layout: windows ${windows.length}`)
+              this._debug(layout)
+
+              if (layout === undefined) {
+                  this._debug('No layout found for the number of windows, allocating the new window 3333');
+                  return;
+              }
+
+              const tilesOfLayout = layout.tiles;
+              this.saveLayoutToWorkspaceAndMonitor(layout, currentWs.index(), this._monitor.index);
+
+              // Tile windows
+              windows
+                  .filter((window) => !window.minimized)
+                  .forEach((window, index) => {
+                      const tile = tilesOfLayout[index];
+
+                      this._debug('aaaaaaaaaaa')
+
+                      if (newWindow && window.get_id() === newWindow.get_id()) {
+                          // new windows need a special treatment otherwise gnome will crash
+                          const windowActor = newWindow.get_compositor_private() as Meta.WindowActor;
+                          const id = windowActor.connect('first-frame', () => {
+                               // while we restore the opacity, making the window visible
+                               // again, we perform easing of movement too
+                               // if the window is no longer a good candidate for
+                               // autotiling, immediately restore its opacity
+                               if (
+                                   !newWindow.minimized &&
+                                   newWindow.get_transient_for() === null &&
+                                   !newWindow.is_attached_dialog()
+                               ) {
+                                   this._debug('entrou no iff')
+                                   this._easeWindowRectFromTile(tile, newWindow, false);
+                               }
+                               windowActor.disconnect(id);
+                          });
+                          (window as ExtendedWindow).assignedTile = tile;
+                          (window as ExtendedWindow).originalSize = newWindow.get_frame_rect().copy();
+                      } else {
+                          this._easeWindowRectFromTile(tile, window, false);
+                          (window as ExtendedWindow).assignedTile = tile;
+                          (window as ExtendedWindow).originalSize = window.get_frame_rect().copy();
+                      }
+
+                  });
+         } else if (windows.length > tiles.length && newWindow) {
+              // theres is more windows than tiles in current layout
+              // here we just try any layout that has the same number of tiles
+
+              this._debug('maiorrrrrrrrrrrrrrrrrrrr')
+
+              const layout = GlobalState.get().layouts.find(
+                  (l) => l.tiles.length === windows.length,
+              );
+              if (layout == undefined) {
+                  return;
+              }
+              this._debug('maiorrrrrrrrrrrrrrrrrrrr 2222')
+
+              this.saveLayoutToWorkspaceAndMonitor(layout, currentWs.index(), this._monitor.index);
+
+              const tilesOfLayout = layout.tiles;
+              const tilesOrderedBySize = tilesOfLayout.sort((a, b) => a.width - b.width).reverse();
+              const otherWindows = windows.filter((w) => w.get_id() !== newWindow.get_id());
+
+              // Allocate old windows
+              otherWindows.forEach((currentWindow, index) => {
+                    const tile = tilesOrderedBySize[index]
+                    this._debug(`Allocating existing window ${currentWindow.get_title()} to tile ${tile.x}, ${tile.y}, ${tile.width}, ${tile.height}`);
+
+                    this._easeWindowRectFromTile(tile, currentWindow, true);
+                    (currentWindow as ExtendedWindow).assignedTile = tile;
+                    (currentWindow as ExtendedWindow).originalSize = currentWindow.get_frame_rect().copy();
+              })
+
+              // Allocate the new created window
+              const lastTile = tilesOrderedBySize[tilesOrderedBySize.length - 1];
+              this._debug(`Allocating new window ${newWindow.get_title()} to tile ${lastTile.x}, ${lastTile.y}, ${lastTile.width}, ${lastTile.height}`);
+
+              const windowActor = newWindow.get_compositor_private() as Meta.WindowActor;
+              const id = windowActor.connect('first-frame', () => {
+                   // while we restore the opacity, making the window visible
+                   // again, we perform easing of movement too
+                   // if the window is no longer a good candidate for
+                   // autotiling, immediately restore its opacity
+                   if (
+                       !newWindow.minimized &&
+                       newWindow.get_transient_for() === null &&
+                       !newWindow.is_attached_dialog()
+                   ) {
+                       this._debug('entrou no iff')
+                       this._easeWindowRectFromTile(lastTile, newWindow, false);
+                   }
+                   (window as ExtendedWindow).assignedTile = lastTile;
+                   (window as ExtendedWindow).originalSize = newWindow.get_frame_rect().copy();
+
+                   this._debug("disconnect new window")
+                   windowActor.disconnect(id);
+              });
+        } else if (newWindow) {
+            this._debug("ue, nao entoru em nenhum")
+            this._debug(`windows: ${windows.length}`)
+            this._debug(`tiles: ${tiles.length}`)
+            this._autoTile(newWindow, true);
         }
+    }
 
-        const tilesOfLayout = layoutCandidade.tiles;
+    private _findBestLayoutForWindow(layouts: Layout[], numberOfWindows: number) {
+        return layouts.find(
+            (l) => l.tiles.length === numberOfWindows,
+        );
+    }
 
-        // Save the selected layout in the assistant as the current layout for the ws and monitor
+    private saveLayoutToWorkspaceAndMonitor(layout: Layout, wsIndex: number, monitorIndex: number) {
         const selected = Settings.get_selected_layouts();
-        selected[currentWs.index()][this._monitor.index] = layoutCandidade.id;
+        selected[wsIndex][monitorIndex] = layout.id;
+        this._debug(`Saving layout ${layout.id} to workspace ${wsIndex} and monitor ${monitorIndex}`);
         Settings.save_selected_layouts(selected);
-
-        windows
-            .filter(
-                (w) => !w.minimized && w.get_id() !== window.get_id(),
-            ).forEach((w, index) => {
-                const tile = tilesOfLayout[index];
-                this._debug(`Deallocating window ${w.get_title()} to tile ${tile.x}, ${tile.y}, ${tile.width}, ${tile.height}`);
-                this._easeWindowRectFromTile(tile, w, false);
-                (w as ExtendedWindow).assignedTile = tile;
-                (w as ExtendedWindow).originalSize = w.get_frame_rect().copy();
-            });
     }
 }

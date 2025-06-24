@@ -224,6 +224,13 @@ export default class TilingShellExtensionPreferences extends ExtensionPreference
         );
         behaviourGroup.add(autoTilingRow);
 
+         const autoTilingCycleLayoutsRow = this._buildSwitchRow(
+            Settings.KEY_ENABLE_AUTO_TILING_CYCLE_LAYOUTS,
+            _('Auto Tiling Cycle Layouts'),
+            _('Change the layout to match the number of tiles with the number of open windows'),
+        );
+        behaviourGroup.add(autoTilingCycleLayoutsRow);
+
         const resizeComplementingRow = this._buildSwitchRow(
             Settings.KEY_RESIZE_COMPLEMENTING_WINDOWS,
             _('Enable auto-resize of the complementing tiled windows'),

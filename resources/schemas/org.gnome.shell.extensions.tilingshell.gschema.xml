@@ -97,6 +97,11 @@
             <summary>Enable auto tiling</summary>
             <description>Automatically tile a new window to the best tile according to the current layout.</description>
         </key>
+        <key name="enable-auto-tiling-cycle-layouts" type="b">
+            <default>false</default>
+            <summary>Auto Tiling Cycle Layouts</summary>
+            <description>Change the layout to match the number of tiles with the number of open windows.</description>
+        </key>
         <key name="overridden-settings" type="s">
             <default>'{}'</default>
             <summary>Overridden settings</summary>

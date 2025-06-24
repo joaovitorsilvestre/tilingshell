@@ -117,6 +117,7 @@ export default class Settings {
         'enable-snap-assistant-windows-suggestions';
     static KEY_ENABLE_SCREEN_EDGES_WINDOWS_SUGGESTIONS =
         'enable-screen-edges-windows-suggestions';
+    static KEY_ENABLE_AUTO_TILING_CYCLE_LAYOUTS = 'enable-auto-tiling-cycle-layouts';
 
     static SETTING_MOVE_WINDOW_RIGHT = 'move-window-right';
     static SETTING_MOVE_WINDOW_LEFT = 'move-window-left';
@@ -316,6 +317,14 @@ export default class Settings {
 
     static set ENABLE_AUTO_TILING(val: boolean) {
         set_boolean(Settings.KEY_ENABLE_AUTO_TILING, val);
+    }
+
+    static get ENABLE_AUTO_TILING_CYCLE_LAYOUTS(): boolean {
+        return get_boolean(Settings.KEY_ENABLE_AUTO_TILING_CYCLE_LAYOUTS);
+    }
+
+    static set ENABLE_AUTO_TILING_CYCLE_LAYOUTS(val: boolean) {
+        set_boolean(Settings.KEY_ENABLE_AUTO_TILING_CYCLE_LAYOUTS, val);
     }
 
     static get ACTIVE_SCREEN_EDGES(): boolean {
